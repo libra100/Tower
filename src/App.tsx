@@ -9,6 +9,7 @@ import {
   Zap, 
   AlertTriangle, 
   RotateCw, 
+  X,
   Users, 
   Pickaxe, 
   Truck, 
@@ -814,7 +815,7 @@ export default function App() {
                   onClick={() => setShowStory(false)}
                   className="text-orange-200/40 hover:text-orange-200"
                 >
-                  <RotateCw className="w-4 h-4 rotate-45" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
               <p className="text-orange-100/80 font-serif leading-relaxed italic">
