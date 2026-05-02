@@ -626,15 +626,15 @@ export default function App() {
           <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={50} />
           <CameraController targetHeight={cameraTargetHeight} />
           
-          <ambientLight intensity={0.4} color="#fff4e0" />
-          <spotLight position={[15, 25, 10]} angle={0.3} penumbra={1} intensity={2} castShadow color="#ffd4a0" />
-          <pointLight position={[-15, 10, -10]} intensity={0.5} color="#ffccaa" />
+          <ambientLight intensity={0.6} color="#fff4e0" />
+          <directionalLight position={[15, 25, 10]} intensity={1.5} castShadow color="#ffd4a0" />
+          <pointLight position={[-15, 10, -10]} intensity={0.8} color="#ffccaa" />
           
           <Suspense fallback={null}>
             <group position={[0, 0, 0]}>
               <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
                 <planeGeometry args={[100, 100]} />
-                <meshStandardMaterial color="#c2a47c" roughness={1} />
+                <meshStandardMaterial color="#8b7355" roughness={1} />
               </mesh>
               <ContactShadows resolution={1024} scale={20} blur={1.5} opacity={0.4} far={10} color="#000" />
 
