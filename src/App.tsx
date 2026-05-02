@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -110,26 +110,33 @@ function DustParticles({ active, position }: { active: boolean, position: [numbe
   );
 }
 
-function Pillar({ position, active, progress = 1 }: { position: [number, number, number], active: boolean, progress?: number }) {
+const Pillar = React.memo(function Pillar({ position, active, progress = 1 }: { position: [number, number, number], active: boolean, progress?: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  
+  const geometry = useMemo(() => new THREE.CylinderGeometry(0.3, 0.3, PILLAR_HEIGHT, 32), []);
+
   useFrame(() => {
     if (meshRef.current) {
       const targetScale = active ? progress : 0;
       meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, targetScale, 0.1);
+      // Position Y relative to the pillar base offset (0.2)
       meshRef.current.position.y = position[1] + (meshRef.current.scale.y * PILLAR_HEIGHT) / 2;
     }
   });
 
   return (
-    <mesh ref={meshRef} position={position} scale={[1, 0, 1]}>
-      <cylinderGeometry args={[PILLAR_RADIUS, PILLAR_RADIUS, PILLAR_HEIGHT, 16]} />
-      <meshStandardMaterial color="#3d352e" metalness={0.2} roughness={0.9} />
+    <mesh ref={meshRef} position={position} scale={[1, 0, 1]} castShadow receiveShadow geometry={geometry}>
+      <meshStandardMaterial 
+        color="#3d352e" 
+        metalness={0.2} 
+        roughness={0.8}
+        polygonOffset
+        polygonOffsetFactor={-1}
+      />
     </mesh>
   );
-}
+});
 
-function WallSegment({ rotation, active, progress = 1 }: { rotation: number, active: boolean, progress?: number }) {
+const WallSegment = React.memo(function WallSegment({ rotation, active, progress = 1 }: { rotation: number, active: boolean, progress?: number }) {
   const groupRef = useRef<THREE.Group>(null);
   
   const SEGMENT_ANGLE = (Math.PI / 2) - (PILLAR_RADIUS / TOWER_RADIUS) * 2.2;
@@ -141,20 +148,28 @@ function WallSegment({ rotation, active, progress = 1 }: { rotation: number, act
     return shape;
   };
 
-  const shapes = React.useMemo(() => {
+  const geometries = useMemo(() => {
     const start = -SEGMENT_ANGLE / 2;
     const end = SEGMENT_ANGLE / 2;
     const midStart = -SEGMENT_ANGLE / 6;
     const midEnd = SEGMENT_ANGLE / 6;
 
-    return {
+    const shapes = {
       base: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, end),
       sideLeft: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, midStart),
       sideRight: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, midEnd, end),
       top: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, end),
       glass: createArcShape(TOWER_RADIUS - 0.12, TOWER_RADIUS - 0.08, midStart, midEnd),
     };
-  }, []);
+
+    return {
+      base: new THREE.ExtrudeGeometry(shapes.base, { depth: 0.8, bevelEnabled: false }),
+      sideLeft: new THREE.ExtrudeGeometry(shapes.sideLeft, { depth: 0.8, bevelEnabled: false }),
+      sideRight: new THREE.ExtrudeGeometry(shapes.sideRight, { depth: 0.8, bevelEnabled: false }),
+      top: new THREE.ExtrudeGeometry(shapes.top, { depth: 0.6, bevelEnabled: false }),
+      glass: new THREE.ExtrudeGeometry(shapes.glass, { depth: 0.8, bevelEnabled: false }),
+    };
+  }, [SEGMENT_ANGLE]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -166,33 +181,28 @@ function WallSegment({ rotation, active, progress = 1 }: { rotation: number, act
   return (
     <group rotation={[0, rotation, 0]} position={[0, 0.2, 0]}>
       <group ref={groupRef} scale={[1, 0, 1]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-          <extrudeGeometry args={[shapes.base, { depth: 0.8, bevelEnabled: false }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} castShadow receiveShadow geometry={geometries.base}>
           <meshStandardMaterial color="#8c857b" metalness={0.1} roughness={0.8} />
         </mesh>
 
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]}>
-          <extrudeGeometry args={[shapes.sideLeft, { depth: 0.8, bevelEnabled: false }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]} castShadow receiveShadow geometry={geometries.sideLeft}>
           <meshStandardMaterial color="#8c857b" metalness={0.1} roughness={0.8} />
         </mesh>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]}>
-          <extrudeGeometry args={[shapes.sideRight, { depth: 0.8, bevelEnabled: false }]} />
-          <meshStandardMaterial color="#8c857b" metalness={0.1} roughness={0.8} />
-        </mesh>
-
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1.6, 0]}>
-          <extrudeGeometry args={[shapes.top, { depth: 0.6, bevelEnabled: false }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]} castShadow receiveShadow geometry={geometries.sideRight}>
           <meshStandardMaterial color="#8c857b" metalness={0.1} roughness={0.8} />
         </mesh>
 
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]}>
-          <extrudeGeometry args={[shapes.glass, { depth: 0.8, bevelEnabled: false }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1.6, 0]} castShadow receiveShadow geometry={geometries.top}>
+          <meshStandardMaterial color="#8c857b" metalness={0.1} roughness={0.8} />
+        </mesh>
+
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.8, 0]} castShadow receiveShadow geometry={geometries.glass}>
           <meshStandardMaterial color="#7a9eb5" transparent opacity={0.4} metalness={0.6} roughness={0.2} />
         </mesh>
       </group>
     </group>
   );
-}
+});
 
 function Wall3D({ active, progress = 1 }: { active: boolean, progress?: number }) {
   return (
@@ -205,58 +215,119 @@ function Wall3D({ active, progress = 1 }: { active: boolean, progress?: number }
   );
 }
 
-function Rebar({ position, progress }: { position: [number, number, number], progress: number }) {
+const Rebar = React.memo(function Rebar({ position, progress }: { position: [number, number, number], progress: number }) {
+  // Rebars grow from the ground level (-0.1) upwards
+  const rebarHeight = progress * 0.15;
+  const geometry = useMemo(() => new THREE.CylinderGeometry(0.025, 0.025, 1, 8), []);
+
   return (
-    <mesh position={[position[0], position[1] + (progress * 1.5) / 2, position[2]]}>
-      <cylinderGeometry args={[0.03, 0.03, progress * 1.5, 8]} />
-      <meshStandardMaterial color="#222" metalness={0.8} roughness={0.2} />
+    <mesh 
+      position={[position[0], -0.1 + rebarHeight / 2, position[2]]} 
+      scale={[1, rebarHeight, 1]}
+      castShadow 
+      receiveShadow 
+      geometry={geometry}
+    >
+      <meshStandardMaterial color="#444" metalness={0.7} roughness={0.3} />
     </mesh>
   );
-}
+});
 
-function Foundation3D({ progress, active }: { progress: number, active: boolean }) {
-  const holeScale = Math.min(progress / 30, 1);
-  const rebarProgress = Math.max(0, Math.min((progress - 30) / 40, 1));
-  const concreteProgress = Math.max(0, Math.min((progress - 70) / 30, 1));
+const FoundationSlabSegment = React.memo(function FoundationSlabSegment({ index, total, progress }: { index: number, total: number, progress: number }) {
+  const segmentProgress = Math.max(0, Math.min(1, (progress * total) - index));
+  if (segmentProgress <= 0) return null;
+
+  const thetaStart = (index / total) * Math.PI * 2;
+  const thetaLength = (1 / total) * Math.PI * 2;
+  
+  // Animation: No drop to avoid gaps, just fade in
+  const yOffset = 0;
+  
+  const geometry = useMemo(() => 
+    new THREE.CylinderGeometry(TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64, 1, false, thetaStart, thetaLength),
+    [thetaStart, thetaLength]
+  );
+  
+  return (
+    <mesh position={[0, 0.1 + yOffset, 0]} castShadow receiveShadow geometry={geometry}>
+      <meshStandardMaterial 
+        color="#4a4540" 
+        roughness={0.8} 
+        transparent 
+        opacity={segmentProgress}
+        polygonOffset
+        polygonOffsetFactor={-1}
+      />
+    </mesh>
+  );
+});
+
+function Foundation3D({ progress, active, isGround = false }: { progress: number, active: boolean, isGround?: boolean }) {
+  // Balanced thresholds: 0-15% Digging, 15-40% Rebar, 40-100% Concrete Pouring
+  const holeScale = isGround ? Math.min(progress / 15, 1) : 1;
+  const rebarProgress = isGround ? Math.max(0, Math.min((progress - 15) / 25, 1)) : 0;
+  // For ground: concrete starts from 40%. For others: starts from 0%.
+  const concreteProgress = isGround ? Math.max(0, Math.min((progress - 40) / 60, 1)) : progress / 100;
+  const SEGMENTS = 12;
+
+  if (!active) return null;
 
   return (
     <group>
-      {/* Excavation Hole */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <circleGeometry args={[TOWER_RADIUS * 1.1 * holeScale, 64]} />
-        <meshStandardMaterial color="#1a1510" roughness={1} />
-      </mesh>
+      {isGround && (
+        <group>
+          {/* Excavation Hole Rim (Slightly above ground for visibility) */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.09, 0]}>
+            <ringGeometry args={[TOWER_RADIUS * 1.05 * holeScale, TOWER_RADIUS * 1.15 * holeScale, 64]} />
+            <meshStandardMaterial color="#222" roughness={1} />
+          </mesh>
+          {/* Excavation Hole Center (Exactly on ground with polygon offset) */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.095, 0]}>
+            <circleGeometry args={[TOWER_RADIUS * 1.1 * holeScale, 64]} />
+            <meshStandardMaterial 
+              color="#000" 
+              roughness={1} 
+              polygonOffset
+              polygonOffsetFactor={-2}
+            />
+          </mesh>
+        </group>
+      )}
 
-      {/* Rebar Grid */}
-      {rebarProgress > 0 && (
+      {isGround && rebarProgress > 0 && (
         <group>
           {Array.from({ length: 12 }).map((_, i) => {
             const angle = (i / 12) * Math.PI * 2;
             const x = Math.cos(angle) * (TOWER_RADIUS - 0.5);
             const z = Math.sin(angle) * (TOWER_RADIUS - 0.5);
-            return <Rebar key={i} position={[x, -0.5, z]} progress={rebarProgress} />;
+            return <Rebar key={i} position={[x, 0, z]} progress={rebarProgress} />;
           })}
           {Array.from({ length: 8 }).map((_, i) => {
             const angle = (i / 8) * Math.PI * 2;
             const x = Math.cos(angle) * (TOWER_RADIUS / 2);
             const z = Math.sin(angle) * (TOWER_RADIUS / 2);
-            return <Rebar key={i + 12} position={[x, -0.5, z]} progress={rebarProgress} />;
+            return <Rebar key={i + 12} position={[x, 0, z]} progress={rebarProgress} />;
           })}
         </group>
       )}
 
-      {/* Concrete Pouring / Foundation Slab */}
       {concreteProgress > 0 && (
-        <mesh position={[0, -0.1 + (concreteProgress * 0.2), 0]}>
-          <cylinderGeometry args={[TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.4, 64]} />
-          <meshStandardMaterial color="#4a4540" roughness={0.8} transparent opacity={concreteProgress} />
-        </mesh>
+        <group>
+          {Array.from({ length: SEGMENTS }).map((_, i) => (
+            <FoundationSlabSegment 
+              key={i} 
+              index={i} 
+              total={SEGMENTS} 
+              progress={concreteProgress} 
+            />
+          ))}
+        </group>
       )}
     </group>
   );
 }
 
-function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = false }: { 
+const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = false }: { 
   data: FloorData, 
   onImpact: () => void, 
   onLanded: () => void,
@@ -268,18 +339,17 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
   const targetY = data.id * FLOOR_HEIGHT;
   const initialY = targetY + 10;
 
-  useEffect(() => {
-    if (data.isLanded) {
-      setHasImpacted(true);
-    } else if (data.id === 0 && data.stage === 'FLOOR') {
-      // Foundation is already on ground
-      setHasImpacted(true);
-      onLanded();
-    }
-  }, [data.isLanded, data.id, data.stage]);
+  const staticSlabGeometry = useMemo(() => new THREE.CylinderGeometry(TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64), []);
 
-  useFrame((state) => {
-    if (groupRef.current && data.stage !== 'NONE') {
+  useEffect(() => {
+    if (data.isLanded || data.id === 0) {
+      setHasImpacted(true);
+      if (data.id === 0) onLanded();
+    }
+  }, [data.isLanded, data.id]);
+
+  useFrame(() => {
+    if (groupRef.current) {
       if (!hasImpacted) {
         groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, targetY, 0.1);
         if (Math.abs(groupRef.current.position.y - targetY) < 0.01) {
@@ -291,20 +361,8 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
       } else {
         groupRef.current.position.y = targetY;
       }
-
-      // Construction shake effect
-      if (isCurrent && currentProgress > 0 && currentProgress < 100) {
-        const shake = (Math.sin(state.clock.elapsedTime * 50) * 0.01);
-        groupRef.current.position.x = shake;
-        groupRef.current.position.z = shake;
-      } else {
-        groupRef.current.position.x = 0;
-        groupRef.current.position.z = 0;
-      }
     }
   });
-
-  if (data.stage === 'NONE') return null;
 
   const pillarOffset = TOWER_RADIUS - (WALL_THICKNESS / 2);
   const pillarPositions: [number, number, number][] = [
@@ -314,23 +372,17 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
     [0, 0.2, -pillarOffset],
   ];
 
+  const isBuildingFoundation = isCurrent && data.stage === 'NONE' && currentProgress > 0;
   const isBuildingPillars = isCurrent && data.stage === 'FLOOR' && currentProgress > 0;
   const isBuildingWalls = isCurrent && data.stage === 'PILLARS' && currentProgress > 0;
 
   return (
-    <group ref={groupRef} position={[0, (data.id === 0 && data.stage === 'FLOOR') ? 0 : (hasImpacted ? targetY : initialY), 0]}>
-      {/* Dust Particles during construction */}
+    <group ref={groupRef} position={[0, (hasImpacted || data.id === 0) ? targetY : initialY, 0]}>
       <DustParticles active={isCurrent && currentProgress > 0 && currentProgress < 100} position={[0, 0, 0]} />
 
-      {/* Special Foundation Animation for Floor 0 */}
-      {data.id === 0 && data.stage === 'FLOOR' && isCurrent && (
-        <Foundation3D progress={currentProgress} active={true} />
-      )}
-
-      {/* Floor Slab (Standard or completed foundation) */}
-      {(data.id !== 0 || (data.id === 0 && (data.stage !== 'FLOOR' || !isCurrent))) && (
-        <mesh position={[0, 0.1, 0]}>
-          <cylinderGeometry args={[TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64]} />
+      {/* STATIC floor slab */}
+      {data.stage !== 'NONE' && (
+        <mesh position={[0, 0.1, 0]} castShadow receiveShadow geometry={staticSlabGeometry}>
           <meshStandardMaterial 
             color="#5c564e" 
             metalness={0.1} 
@@ -341,40 +393,49 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
         </mesh>
       )}
 
-      {/* Pillars */}
-      {hasImpacted && (data.stage === 'PILLARS' || data.stage === 'WALLS' || isBuildingPillars) && (
-        <>
-          {pillarPositions.map((pos, i) => (
-            <Pillar 
-              key={i} 
-              position={pos} 
-              active={true} 
-              progress={isBuildingPillars ? currentProgress / 100 : 1} 
+      {/* CONSTRUCTION elements */}
+      <group>
+        {isBuildingFoundation && (
+          <Foundation3D progress={currentProgress} active={true} isGround={data.id === 0} />
+        )}
+
+        {(data.stage === 'PILLARS' || data.stage === 'WALLS' || isBuildingPillars) && (
+          <>
+            {pillarPositions.map((pos, i) => (
+              <Pillar 
+                key={i} 
+                position={pos} 
+                active={true} 
+                progress={isBuildingPillars ? currentProgress / 100 : 1} 
+              />
+            ))}
+          </>
+        )}
+
+        {(data.stage === 'WALLS' || isBuildingWalls) && (
+          <Wall3D 
+            active={true} 
+            progress={isBuildingWalls ? currentProgress / 100 : (data.stage === 'WALLS' ? 1 : 0)} 
+          />
+        )}
+
+        {isCurrent && currentProgress > 0 && currentProgress < 100 && (
+          <mesh position={[0, 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[TOWER_RADIUS + 0.5, 0.02, 16, 100]} />
+            <meshStandardMaterial 
+              color="#10b981" 
+              transparent 
+              opacity={0.3} 
+              emissive="#10b981" 
+              emissiveIntensity={2} 
             />
-          ))}
-        </>
-      )}
+          </mesh>
+        )}
+      </group>
 
-      {/* Walls */}
-      {hasImpacted && (data.stage === 'WALLS' || isBuildingWalls) && (
-        <Wall3D 
-          active={true} 
-          progress={isBuildingWalls ? currentProgress / 100 : (data.stage === 'WALLS' ? 1 : 0)} 
-        />
-      )}
-
-      {/* Construction Aura */}
-      {isCurrent && currentProgress > 0 && currentProgress < 100 && (
-        <mesh position={[0, 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[TOWER_RADIUS + 0.5, 0.02, 16, 100]} />
-          <meshStandardMaterial color="#10b981" transparent opacity={0.3} emissive="#10b981" emissiveIntensity={2} />
-        </mesh>
-      )}
-
-      {/* Perfect Effect */}
       {data.isPerfect && (
         <Float speed={5} rotationIntensity={2} floatIntensity={2}>
-          <mesh position={[0, PILLAR_HEIGHT + 1, 0]}>
+          <mesh position={[0, PILLAR_HEIGHT + 1, 0]} castShadow>
             <torusGeometry args={[0.5, 0.05, 16, 100]} />
             <meshStandardMaterial color="gold" emissive="gold" emissiveIntensity={2} />
           </mesh>
@@ -382,7 +443,7 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
       )}
     </group>
   );
-}
+});
 
 function CameraController({ targetHeight }: { targetHeight: number }) {
   const { camera } = useThree();
@@ -494,8 +555,7 @@ export default function App() {
     const newFloors = [...floors];
     newFloors[currentFloorIndex] = {
       ...currentFloor,
-      stage: stage,
-      isLanded: stage === 'FLOOR' ? false : currentFloor.isLanded // Reset landed for new floor drop
+      stage: stage
     };
 
     if (stage === 'FLOOR') {
@@ -506,6 +566,7 @@ export default function App() {
       const nextId = currentFloorIndex + 1;
       newFloors.push({ id: nextId, stage: 'NONE', isPerfect: false, timestamp: Date.now(), isLanded: false });
       setCurrentFloorIndex(nextId);
+      setCameraTargetHeight(nextId * FLOOR_HEIGHT);
       setMaxHeight((prev) => Math.max(prev, nextId));
     }
 
@@ -539,23 +600,34 @@ export default function App() {
       {/* 3D Canvas */}
       <div className="absolute inset-0">
         <Canvas 
-          shadows={{ type: THREE.PCFShadowMap }} 
+          shadows={{ type: THREE.PCFSoftShadowMap }} 
           gl={{ antialias: true }}
         >
           <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={50} />
           <CameraController targetHeight={cameraTargetHeight} />
           
-          <ambientLight intensity={0.5} />
-          <spotLight position={[10, 20, 10]} angle={0.15} penumbra={1} intensity={2} castShadow />
-          <pointLight position={[-10, -10, -10]} intensity={1} />
+          <ambientLight intensity={0.6} />
+          <directionalLight 
+            position={[15, 30, 20]} 
+            intensity={1.8} 
+            castShadow 
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-12}
+            shadow-camera-right={12}
+            shadow-camera-top={12}
+            shadow-camera-bottom={-12}
+            shadow-camera-near={0.5}
+            shadow-camera-far={100}
+            shadow-bias={-0.0001}
+          />
+          <pointLight position={[-10, -10, -10]} intensity={0.5} />
           
           <Suspense fallback={null}>
             <group position={[0, 0, 0]}>
               <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
                 <planeGeometry args={[100, 100]} />
-                <meshStandardMaterial color="#111" />
+                <meshStandardMaterial color="#1a1a1a" />
               </mesh>
-              <ContactShadows resolution={1024} scale={20} blur={1.5} opacity={0.3} far={10} color="#000" />
 
               {/* Tower Floors */}
               {floors.map((floor, index) => (
