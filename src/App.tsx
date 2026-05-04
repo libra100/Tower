@@ -122,9 +122,10 @@ function DustParticles({ active, position }: { active: boolean, position: [numbe
   );
 }
 
-function Pillar({ position, active, progress = 1 }: { position: [number, number, number], active: boolean, progress?: number }) {
+const Pillar = React.memo(function Pillar({ position, active, progress = 1 }: { position: [number, number, number], active: boolean, progress?: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  
+  const geometry = useMemo(() => new THREE.BoxGeometry(PILLAR_RADIUS * 2.5, PILLAR_HEIGHT, PILLAR_RADIUS * 2.5), []);
+
   useFrame(() => {
     if (meshRef.current) {
       const targetScale = active ? progress : 0;
@@ -134,14 +135,19 @@ function Pillar({ position, active, progress = 1 }: { position: [number, number,
   });
 
   return (
-    <mesh ref={meshRef} position={position} scale={[1, 0, 1]}>
-      <boxGeometry args={[PILLAR_RADIUS * 2.5, PILLAR_HEIGHT, PILLAR_RADIUS * 2.5]} />
-      <meshStandardMaterial color="#8b4513" metalness={0.1} roughness={1} />
+    <mesh ref={meshRef} position={position} scale={[1, 0, 1]} castShadow receiveShadow geometry={geometry}>
+      <meshStandardMaterial
+        color="#8b4513"
+        metalness={0.1}
+        roughness={1}
+        polygonOffset
+        polygonOffsetFactor={-1}
+      />
     </mesh>
   );
-}
+});
 
-function WallSegment({ rotation, active, progress = 1 }: { rotation: number, active: boolean, progress?: number }) {
+const WallSegment = React.memo(function WallSegment({ rotation, active, progress = 1 }: { rotation: number, active: boolean, progress?: number }) {
   const groupRef = useRef<THREE.Group>(null);
   
   const SEGMENT_ANGLE = (Math.PI / 2) - (PILLAR_RADIUS / TOWER_RADIUS) * 2.2;
@@ -153,19 +159,19 @@ function WallSegment({ rotation, active, progress = 1 }: { rotation: number, act
     return shape;
   };
 
-  const shapes = React.useMemo(() => {
+  const geometries = useMemo(() => {
     const start = -SEGMENT_ANGLE / 2;
     const end = SEGMENT_ANGLE / 2;
-    const midStart = -SEGMENT_ANGLE / 8;
-    const midEnd = SEGMENT_ANGLE / 8;
+
+    const shapes = {
+      full: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, end),
+    };
 
     return {
-      full: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, end),
-      sideLeft: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, midStart),
-      sideRight: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, midEnd, end),
-      top: createArcShape(TOWER_RADIUS - WALL_THICKNESS, TOWER_RADIUS, start, end),
+      wall: new THREE.ExtrudeGeometry(shapes.full, { depth: 2.2, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02 }),
+      mortar: new THREE.ExtrudeGeometry(shapes.full, { depth: 0.05, bevelEnabled: false }),
     };
-  }, []);
+  }, [SEGMENT_ANGLE]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -178,24 +184,21 @@ function WallSegment({ rotation, active, progress = 1 }: { rotation: number, act
     <group rotation={[0, rotation, 0]} position={[0, 0.2, 0]}>
       <group ref={groupRef} scale={[1, 0, 1]}>
         {/* Main Brick Wall */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-          <extrudeGeometry args={[shapes.full, { depth: 2.2, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02 }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} castShadow receiveShadow geometry={geometries.wall}>
           <meshStandardMaterial color="#c66b3d" metalness={0.05} roughness={1} />
         </mesh>
 
-        {/* Bitumen Mortar Lines (Visual effect) */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.7, 0]}>
-          <extrudeGeometry args={[shapes.full, { depth: 0.05, bevelEnabled: false }]} />
+        {/* Bitumen Mortar Lines */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.7, 0]} geometry={geometries.mortar}>
           <meshStandardMaterial color="#1a1a1a" metalness={0.5} roughness={0.5} />
         </mesh>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1.4, 0]}>
-          <extrudeGeometry args={[shapes.full, { depth: 0.05, bevelEnabled: false }]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1.4, 0]} geometry={geometries.mortar}>
           <meshStandardMaterial color="#1a1a1a" metalness={0.5} roughness={0.5} />
         </mesh>
       </group>
     </group>
   );
-}
+});
 
 function Wall3D({ active, progress = 1 }: { active: boolean, progress?: number }) {
   return (
@@ -208,14 +211,18 @@ function Wall3D({ active, progress = 1 }: { active: boolean, progress?: number }
   );
 }
 
-function Scaffolding({ position, progress }: { position: [number, number, number], progress: number }) {
+const Scaffolding = React.memo(function Scaffolding({ position, progress }: { position: [number, number, number], progress: number }) {
+  const geometry = useMemo(() => new THREE.BoxGeometry(0.1, 1, 0.1), []);
   return (
-    <mesh position={[position[0], position[1] + (progress * 1.5) / 2, position[2]]}>
-      <boxGeometry args={[0.1, progress * 1.5, 0.1]} />
+    <mesh
+      position={[position[0], position[1] + (progress * 1.5) / 2, position[2]]}
+      scale={[1, progress * 1.5, 1]}
+      geometry={geometry}
+    >
       <meshStandardMaterial color="#5d4037" roughness={1} />
     </mesh>
   );
-}
+});
 
 function Foundation3D({ progress, active }: { progress: number, active: boolean }) {
   const holeScale = Math.min(progress / 30, 1);
@@ -253,7 +260,7 @@ function Foundation3D({ progress, active }: { progress: number, active: boolean 
   );
 }
 
-function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = false }: { 
+const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = false }: {
   data: FloorData, 
   onImpact: () => void, 
   onLanded: () => void,
@@ -379,7 +386,7 @@ function Floor3D({ data, onImpact, onLanded, currentProgress = 0, isCurrent = fa
       )}
     </group>
   );
-}
+});
 
 function CameraController({ targetHeight }: { targetHeight: number }) {
   const { camera } = useThree();
@@ -736,7 +743,7 @@ export default function App() {
 
       {/* Worker Management Panel */}
       <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-30 scale-90 origin-right">
-        <WorkerControl 
+        <WorkerControl
           icon={<Flame />}
           label="燒磚工"
           count={workers.brickmaking}
