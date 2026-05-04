@@ -124,7 +124,7 @@ function DustParticles({ active, position }: { active: boolean, position: [numbe
 
 const Pillar = React.memo(function Pillar({ position, active, progress = 1 }: { position: [number, number, number], active: boolean, progress?: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const geometry = useMemo(() => new THREE.BoxGeometry(PILLAR_RADIUS * 2.5, PILLAR_HEIGHT, PILLAR_RADIUS * 2.5), []);
+  const geometry = React.useMemo(() => new THREE.BoxGeometry(PILLAR_RADIUS * 2.5, PILLAR_HEIGHT, PILLAR_RADIUS * 2.5), []);
 
   useFrame(() => {
     if (meshRef.current) {
@@ -159,7 +159,7 @@ const WallSegment = React.memo(function WallSegment({ rotation, active, progress
     return shape;
   };
 
-  const geometries = useMemo(() => {
+  const geometries = React.useMemo(() => {
     const start = -SEGMENT_ANGLE / 2;
     const end = SEGMENT_ANGLE / 2;
 
@@ -212,7 +212,7 @@ function Wall3D({ active, progress = 1 }: { active: boolean, progress?: number }
 }
 
 const Scaffolding = React.memo(function Scaffolding({ position, progress }: { position: [number, number, number], progress: number }) {
-  const geometry = useMemo(() => new THREE.BoxGeometry(0.1, 1, 0.1), []);
+  const geometry = React.useMemo(() => new THREE.BoxGeometry(0.1, 1, 0.1), []);
   return (
     <mesh
       position={[position[0], position[1] + (progress * 1.5) / 2, position[2]]}
