@@ -817,8 +817,16 @@ function ResourceCard({ icon, label, value, progress, color, isPercent = false }
   );
 }
 
-function WorkerControl({ icon, label, count, onAdjust, color }: any) {
-  const colors: any = {
+interface WorkerControlProps {
+  icon: React.ReactElement<{ className?: string }>;
+  label: string;
+  count: number;
+  onAdjust: (delta: number) => void;
+  color: string;
+}
+
+function WorkerControl({ icon, label, count, onAdjust, color }: WorkerControlProps) {
+  const colors: Record<string, string> = {
     amber: 'text-amber-400 border-amber-400/20 hover:bg-amber-400/5',
     blue: 'text-blue-400 border-blue-400/20 hover:bg-blue-400/5',
     emerald: 'text-emerald-400 border-emerald-400/20 hover:bg-emerald-400/5'
