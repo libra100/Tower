@@ -42,26 +42,24 @@ describe('App Component', () => {
 
   it('renders the start screen initially', () => {
     render(<App />);
-    expect(screen.getByText('開始建築工程')).toBeInTheDocument();
+    expect(screen.getByText('開啟史詩工程')).toBeInTheDocument();
   });
 
   it('starts the game when the start button is clicked', () => {
     render(<App />);
-    const startButton = screen.getByText('開始建築工程');
+    const startButton = screen.getByText('開啟史詩工程');
     fireEvent.click(startButton);
-    expect(screen.queryByText('開始建築工程')).not.toBeInTheDocument();
+    expect(screen.queryByText('開啟史詩工程')).not.toBeInTheDocument();
   });
 
   it('displays initial resource values', () => {
     render(<App />);
-    expect(screen.getByText('原料儲備')).toBeInTheDocument();
-    expect(screen.getByText('運輸中')).toBeInTheDocument();
-    expect(screen.getByText('工地物資')).toBeInTheDocument();
+    expect(screen.getByText('磚塊 (窯)')).toBeInTheDocument();
+    expect(screen.getByText('瀝青 (坑)')).toBeInTheDocument();
+    expect(screen.getByText('木材 (林)')).toBeInTheDocument();
 
-    const materialValue = screen.getByText('原料儲備').closest('div')?.parentElement?.querySelector('.font-mono');
-    expect(materialValue).toHaveTextContent('0');
-
-    expect(screen.getByText('0.0')).toBeInTheDocument();
+    const brickValue = screen.getByText('磚塊 (窯)').closest('div')?.parentElement?.querySelector('.font-mono');
+    expect(brickValue).toHaveTextContent('10');
   });
 
   it('updates worker counts correctly and respects total limit', () => {
@@ -69,35 +67,35 @@ describe('App Component', () => {
 
     const idleWorkersLabel = screen.getByText('空閒工人');
     const idleWorkersValue = idleWorkersLabel.parentElement?.querySelector('.font-mono');
-    expect(idleWorkersValue).toHaveTextContent('0');
+    expect(idleWorkersValue).toHaveTextContent('0'); // 4+3+2+3+3 = 15. Total is 15.
 
-    const gatheringLabel = screen.getByText('採集');
-    const gatheringControl = gatheringLabel.closest('div')?.parentElement;
-    const decreaseButton = gatheringControl?.querySelector('button[aria-label="Decrease"]');
-    const increaseButton = gatheringControl?.querySelector('button[aria-label="Increase"]');
+    const workerLabel = screen.getByText('燒磚工');
+    const workerControl = workerLabel.closest('div')?.parentElement;
+    const decreaseButton = workerControl?.querySelector('button[aria-label="Decrease"]');
+    const increaseButton = workerControl?.querySelector('button[aria-label="Increase"]');
 
     if (!decreaseButton || !increaseButton) throw new Error('Buttons not found');
 
-    // 1. Decrease gathering
+    // 1. Decrease brickmaking
     fireEvent.click(decreaseButton);
-    const gatheringCount = gatheringLabel.parentElement?.querySelector('.font-mono');
-    expect(gatheringCount).toHaveTextContent('3');
+    const countValue = workerLabel.parentElement?.querySelector('.font-mono');
+    expect(countValue).toHaveTextContent('3');
     expect(idleWorkersValue).toHaveTextContent('1');
 
-    // 2. Increase gathering back to 4
+    // 2. Increase brickmaking back to 4
     fireEvent.click(increaseButton);
-    expect(gatheringCount).toHaveTextContent('4');
+    expect(countValue).toHaveTextContent('4');
     expect(idleWorkersValue).toHaveTextContent('0');
 
-    // 3. Try to increase gathering beyond limit (idle is 0)
+    // 3. Try to increase brickmaking beyond limit (idle is 0)
     fireEvent.click(increaseButton);
-    expect(gatheringCount).toHaveTextContent('4'); // Should stay 4
+    expect(countValue).toHaveTextContent('4'); // Should stay 4
     expect(idleWorkersValue).toHaveTextContent('0');
   });
 
   it('displays the correct construction stage', () => {
     render(<App />);
-    // Initial stage is '地基' (Foundation)
-    expect(screen.getByText(/正在建造: 地基/)).toBeInTheDocument();
+    // Initial stage is '鋪設地基'
+    expect(screen.getByText(/建造進度: 鋪設地基/)).toBeInTheDocument();
   });
 });

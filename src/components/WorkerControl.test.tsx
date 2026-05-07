@@ -62,9 +62,9 @@ describe('WorkerControl', () => {
     expect(onAdjust).toHaveBeenCalledWith(-1);
   });
 
-  it('clones the icon and adds the w-5 h-5 class', () => {
+  it('clones the icon and adds the w-4 h-4 class', () => {
     render(<WorkerControl {...defaultProps} />);
     const icon = screen.getByTestId('test-icon');
-    expect(icon).toHaveClass('w-5 h-5');
+    expect(icon).toHaveClass('w-4 h-4');
   });
 });

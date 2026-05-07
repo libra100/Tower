@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
 import { WorkerControl } from "./components/WorkerControl";
+import { ResourceCard } from "./components/ResourceCard";
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -298,13 +299,13 @@ function Foundation3D({ progress, active, isGround = false }: { progress: number
       </mesh>
 
       {/* Wood Supports */}
-      {brickProgress > 0 && (
+      {rebarProgress > 0 && (
         <group>
           {REBAR_POSITIONS_OUTER.map((pos, i) => (
-            <Rebar key={i} position={pos} progress={rebarProgress} />
+            <Scaffolding key={i} position={pos as [number, number, number]} progress={rebarProgress} />
           ))}
           {REBAR_POSITIONS_INNER.map((pos, i) => (
-            <Rebar key={i + 12} position={pos} progress={rebarProgress} />
+            <Scaffolding key={i + 12} position={pos as [number, number, number]} progress={rebarProgress} />
           ))}
         </group>
       )}
@@ -501,40 +502,44 @@ export default function App() {
       let triggerBuild: BuildStage | null = null;
 
       setProgress(prev => {
-        const next = { ...prev };
+        const nextProgress = { ...prev };
+        const resourcesToProduce: Partial<typeof resources> = {};
+        let resourcesToMove: keyof typeof resources | null = null;
+        const constructionStepResources: Partial<typeof siteResources> = {};
+        let triggerBuild: BuildStage | null = null;
 
         // 1. Production Logic
         if (workers.brickmaking > 0) {
-          next.brickmaking += workers.brickmaking * BASE_SPEED;
-          if (next.brickmaking >= 100) {
-            resourcesToProduce.bricks = (resourcesToProduce.bricks || 0) + 1;
-            next.brickmaking = 0;
+          nextProgress.brickmaking += workers.brickmaking * BASE_SPEED;
+          if (nextProgress.brickmaking >= 100) {
+            resourcesToProduce.bricks = 1;
+            nextProgress.brickmaking = 0;
           }
         }
         if (workers.bitumen > 0) {
-          next.bitumen += workers.bitumen * BASE_SPEED * 0.7;
-          if (next.bitumen >= 100) {
-            resourcesToProduce.bitumen = (resourcesToProduce.bitumen || 0) + 1;
-            next.bitumen = 0;
+          nextProgress.bitumen += workers.bitumen * BASE_SPEED * 0.7;
+          if (nextProgress.bitumen >= 100) {
+            resourcesToProduce.bitumen = 1;
+            nextProgress.bitumen = 0;
           }
         }
         if (workers.wood > 0) {
-          next.wood += workers.wood * BASE_SPEED * 0.5;
-          if (next.wood >= 100) {
-            resourcesToProduce.wood = (resourcesToProduce.wood || 0) + 1;
-            next.wood = 0;
+          nextProgress.wood += workers.wood * BASE_SPEED * 0.5;
+          if (nextProgress.wood >= 100) {
+            resourcesToProduce.wood = 1;
+            nextProgress.wood = 0;
           }
         }
 
         // 2. Transport Logic (moves all types)
         const hasResources = resources.bricks > 0 || resources.bitumen > 0 || resources.wood > 0;
         if (workers.transport > 0 && hasResources) {
-          next.transport += workers.transport * BASE_SPEED * 0.8;
-          if (next.transport >= 100) {
+          nextProgress.transport += workers.transport * BASE_SPEED * 0.8;
+          if (nextProgress.transport >= 100) {
             if (resources.bricks > 0) resourcesToMove = 'bricks';
             else if (resources.bitumen > 0) resourcesToMove = 'bitumen';
             else if (resources.wood > 0) resourcesToMove = 'wood';
-            next.transport = 0;
+            nextProgress.transport = 0;
           }
         }
 
@@ -556,57 +561,57 @@ export default function App() {
 
             if (hasEnough) {
               const speed = (workers.construction * BASE_SPEED * 0.3);
-              next.construction += speed;
+              nextProgress.construction += speed;
 
               const step = speed / 100;
               Object.entries(costs).forEach(([res, amount]) => {
                 const rKey = res as keyof typeof siteResources;
-                constructionStepResources[rKey] = (constructionStepResources[rKey] || 0) + (amount as number) * step;
+                constructionStepResources[rKey] = (amount as number) * step;
               });
 
-              if (next.construction >= 100) {
+              if (nextProgress.construction >= 100) {
                 triggerBuild = nextStage;
-                next.construction = 0;
+                nextProgress.construction = 0;
               }
             }
           }
         }
 
-        return next;
+        // Apply all state changes together
+        if (Object.keys(resourcesToProduce).length > 0 || resourcesToMove) {
+          setResources(r => {
+            const nextR = { ...r };
+            Object.entries(resourcesToProduce).forEach(([res, amount]) => {
+              const key = res as keyof typeof resources;
+              nextR[key] += amount!;
+            });
+            if (resourcesToMove) {
+              nextR[resourcesToMove] = Math.max(0, nextR[resourcesToMove] - 1);
+            }
+            return nextR;
+          });
+        }
+
+        if (resourcesToMove || Object.keys(constructionStepResources).length > 0) {
+          setSiteResources(sr => {
+            const nextSR = { ...sr };
+            if (resourcesToMove) {
+              nextSR[resourcesToMove] += 1;
+            }
+            Object.entries(constructionStepResources).forEach(([res, amount]) => {
+              const key = res as keyof typeof siteResources;
+              nextSR[key] = Math.max(0, nextSR[key] - amount!);
+            });
+            return nextSR;
+          });
+        }
+
+        if (triggerBuild) {
+          handleBuild(triggerBuild);
+        }
+
+        return nextProgress;
       });
-
-      // Apply changes outside setProgress to avoid nested setters and follow anti-pattern advice
-      if (Object.keys(resourcesToProduce).length > 0 || resourcesToMove) {
-        setResources(r => {
-          const nextR = { ...r };
-          Object.entries(resourcesToProduce).forEach(([res, amount]) => {
-            const key = res as keyof typeof resources;
-            nextR[key] += amount!;
-          });
-          if (resourcesToMove) {
-            nextR[resourcesToMove] = Math.max(0, nextR[resourcesToMove] - 1);
-          }
-          return nextR;
-        });
-      }
-
-      if (resourcesToMove || Object.keys(constructionStepResources).length > 0) {
-        setSiteResources(sr => {
-          const nextSR = { ...sr };
-          if (resourcesToMove) {
-            nextSR[resourcesToMove] += 1;
-          }
-          Object.entries(constructionStepResources).forEach(([res, amount]) => {
-            const key = res as keyof typeof siteResources;
-            nextSR[key] = Math.max(0, nextSR[key] - amount!);
-          });
-          return nextSR;
-        });
-      }
-
-      if (triggerBuild) {
-        handleBuild(triggerBuild);
-      }
 
     }, 100);
 
@@ -915,82 +920,4 @@ export default function App() {
   );
 }
 
-function ResourceCard({ icon, label, value, siteValue, progress, color, isPercent = false }: any) {
-  const colors: any = {
-    amber: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-    blue: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-    emerald: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-    orange: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-    slate: 'text-slate-400 bg-slate-400/10 border-slate-400/20'
-  };
-
-  const barColors: any = {
-    amber: 'bg-amber-400',
-    blue: 'bg-blue-400',
-    emerald: 'bg-emerald-400',
-    orange: 'bg-orange-400',
-    slate: 'bg-slate-400'
-  };
-
-  return (
-    <div className={`min-w-[100px] rounded-xl border p-2 backdrop-blur-md ${colors[color]}`}>
-      <div className="flex items-center gap-2 mb-1">
-        {icon}
-        <span className="text-[9px] font-bold uppercase tracking-wider opacity-60">{label}</span>
-      </div>
-      <div className="flex justify-between items-end mb-1">
-        <div className="text-xl font-black font-mono leading-none">
-          {value}{isPercent && '%'}
-        </div>
-        {siteValue !== undefined && (
-          <div className="text-[10px] opacity-70">
-            工地: {siteValue}
-          </div>
-        )}
-      </div>
-      <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-        <motion.div 
-          className={`h-full ${barColors[color]}`}
-          animate={{ width: `${progress}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function WorkerControl({ icon, label, count, onAdjust, color }: any) {
-  const colors: any = {
-    amber: 'text-amber-400 border-amber-400/20 hover:bg-amber-400/5',
-    blue: 'text-blue-400 border-blue-400/20 hover:bg-blue-400/5',
-    emerald: 'text-emerald-400 border-emerald-400/20 hover:bg-emerald-400/5',
-    orange: 'text-orange-400 border-orange-400/20 hover:bg-orange-400/5',
-    slate: 'text-slate-400 border-slate-400/20 hover:bg-slate-400/5'
-  };
-
-  return (
-    <div className={`bg-black/60 backdrop-blur-md border rounded-xl p-2 flex flex-col items-center gap-1 ${colors[color]}`}>
-      <div className="p-1.5 rounded-lg bg-white/5">
-        {React.cloneElement(icon, { className: 'w-4 h-4' })}
-      </div>
-      <div className="flex flex-col items-center">
-        <span className="text-[8px] font-bold uppercase tracking-widest opacity-40">{label}</span>
-        <span className="text-lg font-black font-mono">{count}</span>
-      </div>
-      <div className="flex gap-2">
-        <button 
-          onClick={() => onAdjust(-1)}
-          className="p-1 hover:bg-white/10 rounded transition-colors cursor-pointer"
-        >
-          <ChevronDown className="w-4 h-4" />
-        </button>
-        <button 
-          onClick={() => onAdjust(1)}
-          className="p-1 hover:bg-white/10 rounded transition-colors cursor-pointer"
-        >
-          <ChevronUp className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
