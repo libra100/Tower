@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
-import { WorkerControl } from './components/WorkerControl';
+import { WorkerControl } from "./components/WorkerControl";
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -817,5 +817,4 @@ function ResourceCard({ icon, label, value, progress, color, isPercent = false }
     </div>
   );
 }
-
 
