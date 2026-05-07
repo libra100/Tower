@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
+import { WorkerControl } from "./components/WorkerControl";
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -27,6 +28,31 @@ const PILLAR_RADIUS = 0.15;
 const PILLAR_HEIGHT = 2.2;
 const TOWER_RADIUS = 3;
 const WALL_THICKNESS = 0.25;
+
+const REBAR_POSITIONS_OUTER = Array.from({ length: 12 }).map((_, i) => {
+  const angle = (i / 12) * Math.PI * 2;
+  const x = Math.cos(angle) * (TOWER_RADIUS - 0.5);
+  const z = Math.sin(angle) * (TOWER_RADIUS - 0.5);
+  return [x, 0, z] as [number, number, number];
+});
+
+const REBAR_POSITIONS_INNER = Array.from({ length: 8 }).map((_, i) => {
+  const angle = (i / 8) * Math.PI * 2;
+  const x = Math.cos(angle) * (TOWER_RADIUS / 2);
+  const z = Math.sin(angle) * (TOWER_RADIUS / 2);
+  return [x, 0, z] as [number, number, number];
+});
+
+const PILLAR_OFFSET = TOWER_RADIUS - (WALL_THICKNESS / 2);
+const PILLAR_POSITIONS: [number, number, number][] = [
+  [PILLAR_OFFSET, 0.2, 0],
+  [-PILLAR_OFFSET, 0.2, 0],
+  [0, 0.2, PILLAR_OFFSET],
+  [0, 0.2, -PILLAR_OFFSET],
+];
+
+const FOUNDATION_SEGMENTS = 12;
+const FOUNDATION_INDICES = Array.from({ length: FOUNDATION_SEGMENTS }).map((_, i) => i);
 
 const COSTS = {
   FLOOR: 10,
@@ -268,7 +294,6 @@ function Foundation3D({ progress, active, isGround = false }: { progress: number
   const rebarProgress = isGround ? Math.max(0, Math.min((progress - 15) / 25, 1)) : 0;
   // For ground: concrete starts from 40%. For others: starts from 0%.
   const concreteProgress = isGround ? Math.max(0, Math.min((progress - 40) / 60, 1)) : progress / 100;
-  const SEGMENTS = 12;
 
   if (!active) return null;
 
@@ -296,28 +321,22 @@ function Foundation3D({ progress, active, isGround = false }: { progress: number
 
       {isGround && rebarProgress > 0 && (
         <group>
-          {Array.from({ length: 12 }).map((_, i) => {
-            const angle = (i / 12) * Math.PI * 2;
-            const x = Math.cos(angle) * (TOWER_RADIUS - 0.5);
-            const z = Math.sin(angle) * (TOWER_RADIUS - 0.5);
-            return <Rebar key={i} position={[x, 0, z]} progress={rebarProgress} />;
-          })}
-          {Array.from({ length: 8 }).map((_, i) => {
-            const angle = (i / 8) * Math.PI * 2;
-            const x = Math.cos(angle) * (TOWER_RADIUS / 2);
-            const z = Math.sin(angle) * (TOWER_RADIUS / 2);
-            return <Rebar key={i + 12} position={[x, 0, z]} progress={rebarProgress} />;
-          })}
+          {REBAR_POSITIONS_OUTER.map((pos, i) => (
+            <Rebar key={i} position={pos} progress={rebarProgress} />
+          ))}
+          {REBAR_POSITIONS_INNER.map((pos, i) => (
+            <Rebar key={i + 12} position={pos} progress={rebarProgress} />
+          ))}
         </group>
       )}
 
       {concreteProgress > 0 && (
         <group>
-          {Array.from({ length: SEGMENTS }).map((_, i) => (
+          {FOUNDATION_INDICES.map((i) => (
             <FoundationSlabSegment 
               key={i} 
               index={i} 
-              total={SEGMENTS} 
+              total={FOUNDATION_SEGMENTS}
               progress={concreteProgress} 
             />
           ))}
@@ -364,14 +383,6 @@ const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentP
     }
   });
 
-  const pillarOffset = TOWER_RADIUS - (WALL_THICKNESS / 2);
-  const pillarPositions: [number, number, number][] = [
-    [pillarOffset, 0.2, 0],
-    [-pillarOffset, 0.2, 0],
-    [0, 0.2, pillarOffset],
-    [0, 0.2, -pillarOffset],
-  ];
-
   const isBuildingFoundation = isCurrent && data.stage === 'NONE' && currentProgress > 0;
   const isBuildingPillars = isCurrent && data.stage === 'FLOOR' && currentProgress > 0;
   const isBuildingWalls = isCurrent && data.stage === 'PILLARS' && currentProgress > 0;
@@ -401,7 +412,7 @@ const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentP
 
         {(data.stage === 'PILLARS' || data.stage === 'WALLS' || isBuildingPillars) && (
           <>
-            {pillarPositions.map((pos, i) => (
+            {PILLAR_POSITIONS.map((pos, i) => (
               <Pillar 
                 key={i} 
                 position={pos} 
@@ -812,40 +823,6 @@ function ResourceCard({ icon, label, value, progress, color, isPercent = false }
           className={`h-full ${color === 'amber' ? 'bg-amber-400' : color === 'blue' ? 'bg-blue-400' : 'bg-emerald-400'}`}
           animate={{ width: `${progress}%` }}
         />
-      </div>
-    </div>
-  );
-}
-
-function WorkerControl({ icon, label, count, onAdjust, color }: any) {
-  const colors: any = {
-    amber: 'text-amber-400 border-amber-400/20 hover:bg-amber-400/5',
-    blue: 'text-blue-400 border-blue-400/20 hover:bg-blue-400/5',
-    emerald: 'text-emerald-400 border-emerald-400/20 hover:bg-emerald-400/5'
-  };
-
-  return (
-    <div className={`bg-black/60 backdrop-blur-md border rounded-2xl p-3 flex flex-col items-center gap-3 ${colors[color]}`}>
-      <div className="p-2 rounded-lg bg-white/5">
-        {React.cloneElement(icon, { className: 'w-5 h-5' })}
-      </div>
-      <div className="flex flex-col items-center">
-        <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">{label}</span>
-        <span className="text-xl font-black font-mono">{count}</span>
-      </div>
-      <div className="flex flex-col gap-1">
-        <button 
-          onClick={() => onAdjust(1)}
-          className="p-1 hover:bg-white/10 rounded transition-colors cursor-pointer"
-        >
-          <ChevronUp className="w-4 h-4" />
-        </button>
-        <button 
-          onClick={() => onAdjust(-1)}
-          className="p-1 hover:bg-white/10 rounded transition-colors cursor-pointer"
-        >
-          <ChevronDown className="w-4 h-4" />
-        </button>
       </div>
     </div>
   );
