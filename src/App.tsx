@@ -496,6 +496,11 @@ export default function App() {
     if (!gameStarted) return;
 
     const interval = setInterval(() => {
+      let resourcesToProduce: Partial<typeof resources> = {};
+      let resourcesToMove: keyof typeof resources | null = null;
+      let constructionStepResources: Partial<typeof siteResources> = {};
+      let triggerBuild: BuildStage | null = null;
+
       setProgress(prev => {
         const nextProgress = { ...prev };
         const resourcesToProduce: Partial<typeof resources> = {};
