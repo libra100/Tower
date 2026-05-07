@@ -251,10 +251,43 @@ const Scaffolding = React.memo(function Scaffolding({ position, progress }: { po
   );
 });
 
-function Foundation3D({ progress, active }: { progress: number, active: boolean }) {
-  const holeScale = Math.min(progress / 30, 1);
-  const brickProgress = Math.max(0, Math.min((progress - 30) / 40, 1));
-  const bitumenProgress = Math.max(0, Math.min((progress - 70) / 30, 1));
+const FoundationSlabSegment = React.memo(function FoundationSlabSegment({ index, total, progress }: { index: number, total: number, progress: number }) {
+  const segmentProgress = Math.max(0, Math.min(1, (progress * total) - index));
+  if (segmentProgress <= 0) return null;
+
+  const thetaStart = (index / total) * Math.PI * 2;
+  const thetaLength = (1 / total) * Math.PI * 2;
+  
+  // Animation: No drop to avoid gaps, just fade in
+  const yOffset = 0;
+  
+  const geometry = useMemo(() => 
+    new THREE.CylinderGeometry(TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64, 1, false, thetaStart, thetaLength),
+    [thetaStart, thetaLength]
+  );
+  
+  return (
+    <mesh position={[0, 0.1 + yOffset, 0]} castShadow receiveShadow geometry={geometry}>
+      <meshStandardMaterial 
+        color="#4a4540" 
+        roughness={0.8} 
+        transparent 
+        opacity={segmentProgress}
+        polygonOffset
+        polygonOffsetFactor={-1}
+      />
+    </mesh>
+  );
+});
+
+function Foundation3D({ progress, active, isGround = false }: { progress: number, active: boolean, isGround?: boolean }) {
+  // Balanced thresholds: 0-15% Digging, 15-40% Rebar, 40-100% Concrete Pouring
+  const holeScale = isGround ? Math.min(progress / 15, 1) : 1;
+  const rebarProgress = isGround ? Math.max(0, Math.min((progress - 15) / 25, 1)) : 0;
+  // For ground: concrete starts from 40%. For others: starts from 0%.
+  const concreteProgress = isGround ? Math.max(0, Math.min((progress - 40) / 60, 1)) : progress / 100;
+
+  if (!active) return null;
 
   return (
     <group>
@@ -267,21 +300,26 @@ function Foundation3D({ progress, active }: { progress: number, active: boolean 
       {/* Wood Supports */}
       {brickProgress > 0 && (
         <group>
-          {Array.from({ length: 8 }).map((_, i) => {
-            const angle = (i / 8) * Math.PI * 2;
-            const x = Math.cos(angle) * (TOWER_RADIUS);
-            const z = Math.sin(angle) * (TOWER_RADIUS);
-            return <Scaffolding key={i} position={[x, -0.5, z]} progress={brickProgress} />;
-          })}
+          {REBAR_POSITIONS_OUTER.map((pos, i) => (
+            <Rebar key={i} position={pos} progress={rebarProgress} />
+          ))}
+          {REBAR_POSITIONS_INNER.map((pos, i) => (
+            <Rebar key={i + 12} position={pos} progress={rebarProgress} />
+          ))}
         </group>
       )}
 
-      {/* Brick Foundation Slab */}
-      {bitumenProgress > 0 && (
-        <mesh position={[0, -0.1 + (bitumenProgress * 0.2), 0]}>
-          <cylinderGeometry args={[TOWER_RADIUS + 0.2, TOWER_RADIUS + 0.5, 0.4, 6]} />
-          <meshStandardMaterial color="#5d2e1a" roughness={0.9} transparent opacity={bitumenProgress} />
-        </mesh>
+      {concreteProgress > 0 && (
+        <group>
+          {FOUNDATION_INDICES.map((i) => (
+            <FoundationSlabSegment 
+              key={i} 
+              index={i} 
+              total={FOUNDATION_SEGMENTS}
+              progress={concreteProgress} 
+            />
+          ))}
+        </group>
       )}
     </group>
   );
