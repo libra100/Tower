@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
+import { WorkerControl } from "./components/WorkerControl";
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -30,6 +31,31 @@ const PILLAR_RADIUS = 0.15;
 const PILLAR_HEIGHT = 2.2;
 const TOWER_RADIUS = 3;
 const WALL_THICKNESS = 0.25;
+
+const REBAR_POSITIONS_OUTER = Array.from({ length: 12 }).map((_, i) => {
+  const angle = (i / 12) * Math.PI * 2;
+  const x = Math.cos(angle) * (TOWER_RADIUS - 0.5);
+  const z = Math.sin(angle) * (TOWER_RADIUS - 0.5);
+  return [x, 0, z] as [number, number, number];
+});
+
+const REBAR_POSITIONS_INNER = Array.from({ length: 8 }).map((_, i) => {
+  const angle = (i / 8) * Math.PI * 2;
+  const x = Math.cos(angle) * (TOWER_RADIUS / 2);
+  const z = Math.sin(angle) * (TOWER_RADIUS / 2);
+  return [x, 0, z] as [number, number, number];
+});
+
+const PILLAR_OFFSET = TOWER_RADIUS - (WALL_THICKNESS / 2);
+const PILLAR_POSITIONS: [number, number, number][] = [
+  [PILLAR_OFFSET, 0.2, 0],
+  [-PILLAR_OFFSET, 0.2, 0],
+  [0, 0.2, PILLAR_OFFSET],
+  [0, 0.2, -PILLAR_OFFSET],
+];
+
+const FOUNDATION_SEGMENTS = 12;
+const FOUNDATION_INDICES = Array.from({ length: FOUNDATION_SEGMENTS }).map((_, i) => i);
 
 const COSTS = {
   FLOOR: { bricks: 5, wood: 2 },
@@ -130,6 +156,7 @@ const Pillar = React.memo(function Pillar({ position, active, progress = 1 }: { 
     if (meshRef.current) {
       const targetScale = active ? progress : 0;
       meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, targetScale, 0.1);
+      // Position Y relative to the pillar base offset (0.2)
       meshRef.current.position.y = position[1] + (meshRef.current.scale.y * PILLAR_HEIGHT) / 2;
     }
   });
@@ -272,18 +299,17 @@ const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentP
   const targetY = data.id * FLOOR_HEIGHT;
   const initialY = targetY + 10;
 
-  useEffect(() => {
-    if (data.isLanded) {
-      setHasImpacted(true);
-    } else if (data.id === 0 && data.stage === 'FLOOR') {
-      // Foundation is already on ground
-      setHasImpacted(true);
-      onLanded();
-    }
-  }, [data.isLanded, data.id, data.stage]);
+  const staticSlabGeometry = useMemo(() => new THREE.CylinderGeometry(TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64), []);
 
-  useFrame((state) => {
-    if (groupRef.current && data.stage !== 'NONE') {
+  useEffect(() => {
+    if (data.isLanded || data.id === 0) {
+      setHasImpacted(true);
+      if (data.id === 0) onLanded();
+    }
+  }, [data.isLanded, data.id]);
+
+  useFrame(() => {
+    if (groupRef.current) {
       if (!hasImpacted) {
         groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, targetY, 0.1);
         if (Math.abs(groupRef.current.position.y - targetY) < 0.01) {
@@ -295,46 +321,20 @@ const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentP
       } else {
         groupRef.current.position.y = targetY;
       }
-
-      // Construction shake effect
-      if (isCurrent && currentProgress > 0 && currentProgress < 100) {
-        const shake = (Math.sin(state.clock.elapsedTime * 50) * 0.01);
-        groupRef.current.position.x = shake;
-        groupRef.current.position.z = shake;
-      } else {
-        groupRef.current.position.x = 0;
-        groupRef.current.position.z = 0;
-      }
     }
   });
 
-  if (data.stage === 'NONE') return null;
-
-  const pillarOffset = TOWER_RADIUS - (WALL_THICKNESS / 2);
-  const pillarPositions: [number, number, number][] = [
-    [pillarOffset, 0.2, 0],
-    [-pillarOffset, 0.2, 0],
-    [0, 0.2, pillarOffset],
-    [0, 0.2, -pillarOffset],
-  ];
-
+  const isBuildingFoundation = isCurrent && data.stage === 'NONE' && currentProgress > 0;
   const isBuildingPillars = isCurrent && data.stage === 'FLOOR' && currentProgress > 0;
   const isBuildingWalls = isCurrent && data.stage === 'PILLARS' && currentProgress > 0;
 
   return (
-    <group ref={groupRef} position={[0, (data.id === 0 && data.stage === 'FLOOR') ? 0 : (hasImpacted ? targetY : initialY), 0]}>
-      {/* Dust Particles during construction */}
+    <group ref={groupRef} position={[0, (hasImpacted || data.id === 0) ? targetY : initialY, 0]}>
       <DustParticles active={isCurrent && currentProgress > 0 && currentProgress < 100} position={[0, 0, 0]} />
 
-      {/* Special Foundation Animation for Floor 0 */}
-      {data.id === 0 && data.stage === 'FLOOR' && isCurrent && (
-        <Foundation3D progress={currentProgress} active={true} />
-      )}
-
-      {/* Floor Slab (Standard or completed foundation) */}
-      {(data.id !== 0 || (data.id === 0 && (data.stage !== 'FLOOR' || !isCurrent))) && (
-        <mesh position={[0, 0.1, 0]}>
-          <cylinderGeometry args={[TOWER_RADIUS + 0.1, TOWER_RADIUS + 0.1, 0.2, 64]} />
+      {/* STATIC floor slab */}
+      {data.stage !== 'NONE' && (
+        <mesh position={[0, 0.1, 0]} castShadow receiveShadow geometry={staticSlabGeometry}>
           <meshStandardMaterial 
             color="#a0522d"
             metalness={0.0}
@@ -345,40 +345,49 @@ const Floor3D = React.memo(function Floor3D({ data, onImpact, onLanded, currentP
         </mesh>
       )}
 
-      {/* Pillars */}
-      {hasImpacted && (data.stage === 'PILLARS' || data.stage === 'WALLS' || isBuildingPillars) && (
-        <>
-          {pillarPositions.map((pos, i) => (
-            <Pillar 
-              key={i} 
-              position={pos} 
-              active={true} 
-              progress={isBuildingPillars ? currentProgress / 100 : 1} 
+      {/* CONSTRUCTION elements */}
+      <group>
+        {isBuildingFoundation && (
+          <Foundation3D progress={currentProgress} active={true} isGround={data.id === 0} />
+        )}
+
+        {(data.stage === 'PILLARS' || data.stage === 'WALLS' || isBuildingPillars) && (
+          <>
+            {PILLAR_POSITIONS.map((pos, i) => (
+              <Pillar 
+                key={i} 
+                position={pos} 
+                active={true} 
+                progress={isBuildingPillars ? currentProgress / 100 : 1} 
+              />
+            ))}
+          </>
+        )}
+
+        {(data.stage === 'WALLS' || isBuildingWalls) && (
+          <Wall3D 
+            active={true} 
+            progress={isBuildingWalls ? currentProgress / 100 : (data.stage === 'WALLS' ? 1 : 0)} 
+          />
+        )}
+
+        {isCurrent && currentProgress > 0 && currentProgress < 100 && (
+          <mesh position={[0, 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[TOWER_RADIUS + 0.5, 0.02, 16, 100]} />
+            <meshStandardMaterial 
+              color="#10b981" 
+              transparent 
+              opacity={0.3} 
+              emissive="#10b981" 
+              emissiveIntensity={2} 
             />
-          ))}
-        </>
-      )}
+          </mesh>
+        )}
+      </group>
 
-      {/* Walls */}
-      {hasImpacted && (data.stage === 'WALLS' || isBuildingWalls) && (
-        <Wall3D 
-          active={true} 
-          progress={isBuildingWalls ? currentProgress / 100 : (data.stage === 'WALLS' ? 1 : 0)} 
-        />
-      )}
-
-      {/* Construction Aura */}
-      {isCurrent && currentProgress > 0 && currentProgress < 100 && (
-        <mesh position={[0, 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[TOWER_RADIUS + 0.5, 0.02, 16, 100]} />
-          <meshStandardMaterial color="#10b981" transparent opacity={0.3} emissive="#10b981" emissiveIntensity={2} />
-        </mesh>
-      )}
-
-      {/* Perfect Effect */}
       {data.isPerfect && (
         <Float speed={5} rotationIntensity={2} floatIntensity={2}>
-          <mesh position={[0, PILLAR_HEIGHT + 1, 0]}>
+          <mesh position={[0, PILLAR_HEIGHT + 1, 0]} castShadow>
             <torusGeometry args={[0.5, 0.05, 16, 100]} />
             <meshStandardMaterial color="gold" emissive="gold" emissiveIntensity={2} />
           </mesh>
@@ -573,8 +582,7 @@ export default function App() {
     const newFloors = [...floors];
     newFloors[currentFloorIndex] = {
       ...currentFloor,
-      stage: stage,
-      isLanded: stage === 'FLOOR' ? false : currentFloor.isLanded // Reset landed for new floor drop
+      stage: stage
     };
 
     if (stage === 'FLOOR') {
@@ -585,6 +593,7 @@ export default function App() {
       const nextId = currentFloorIndex + 1;
       newFloors.push({ id: nextId, stage: 'NONE', isPerfect: false, timestamp: Date.now(), isLanded: false });
       setCurrentFloorIndex(nextId);
+      setCameraTargetHeight(nextId * FLOOR_HEIGHT);
       setMaxHeight((prev) => Math.max(prev, nextId));
 
       // Trigger story
@@ -628,7 +637,7 @@ export default function App() {
       {/* 3D Canvas */}
       <div className="absolute inset-0">
         <Canvas 
-          shadows={{ type: THREE.PCFShadowMap }} 
+          shadows={{ type: THREE.PCFSoftShadowMap }} 
           gl={{ antialias: true }}
         >
           <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={50} />
