@@ -662,7 +662,7 @@ export default function App() {
 
   const adjustWorkers = (role: keyof typeof workers, delta: number) => {
     setWorkers(prev => {
-      const currentTotal = Object.values(prev).reduce((a, b) => a + b, 0);
+      const currentTotal = prev.brickmaking + prev.bitumen + prev.wood + prev.transport + prev.construction;
       if (delta > 0 && currentTotal >= TOTAL_WORKERS) return prev;
       
       const newVal = Math.max(0, prev[role] + delta);
@@ -670,7 +670,7 @@ export default function App() {
     });
   };
 
-  const idleWorkers = TOTAL_WORKERS - Object.values(workers).reduce((a, b) => a + b, 0);
+  const idleWorkers = TOTAL_WORKERS - (workers.brickmaking + workers.bitumen + workers.wood + workers.transport + workers.construction);
 
   return (
     <div className="relative w-full h-screen bg-[#1a0f00] overflow-hidden font-sans text-white">
