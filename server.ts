@@ -18,8 +18,8 @@ app.post('/api/gemini/chat', async (req, res) => {
     return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server.' });
   }
 
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required.' });
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Message is required and must be a string.' });
   }
 
   try {
