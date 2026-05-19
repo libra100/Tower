@@ -555,19 +555,30 @@ export default function App() {
 
           if (nextStage !== 'NONE') {
             const costs = COSTS[nextStage as keyof typeof COSTS];
-            const hasEnough = Object.entries(costs).every(([res, amount]) =>
-              siteResources[res as keyof typeof siteResources] >= (amount as number) * 0.1
-            );
+
+            let hasEnough = true;
+            for (const res in costs) {
+              if (Object.prototype.hasOwnProperty.call(costs, res)) {
+                const amount = costs[res as keyof typeof costs];
+                if (!(siteResources[res as keyof typeof siteResources] >= amount * 0.1)) {
+                  hasEnough = false;
+                  break;
+                }
+              }
+            }
 
             if (hasEnough) {
               const speed = (workers.construction * BASE_SPEED * 0.3);
               nextProgress.construction += speed;
 
               const step = speed / 100;
-              Object.entries(costs).forEach(([res, amount]) => {
-                const rKey = res as keyof typeof siteResources;
-                constructionStepResources[rKey] = (amount as number) * step;
-              });
+              for (const res in costs) {
+                if (Object.prototype.hasOwnProperty.call(costs, res)) {
+                  const amount = costs[res as keyof typeof costs];
+                  const rKey = res as keyof typeof siteResources;
+                  constructionStepResources[rKey] = amount * step;
+                }
+              }
 
               if (nextProgress.construction >= 100) {
                 triggerBuild = nextStage;
@@ -581,10 +592,13 @@ export default function App() {
         if (Object.keys(resourcesToProduce).length > 0 || resourcesToMove) {
           setResources(r => {
             const nextR = { ...r };
-            Object.entries(resourcesToProduce).forEach(([res, amount]) => {
-              const key = res as keyof typeof resources;
-              nextR[key] += amount!;
-            });
+            for (const res in resourcesToProduce) {
+              if (Object.prototype.hasOwnProperty.call(resourcesToProduce, res)) {
+                const amount = resourcesToProduce[res as keyof typeof resourcesToProduce];
+                const key = res as keyof typeof resources;
+                nextR[key] += amount!;
+              }
+            }
             if (resourcesToMove) {
               nextR[resourcesToMove] = Math.max(0, nextR[resourcesToMove] - 1);
             }
@@ -598,10 +612,13 @@ export default function App() {
             if (resourcesToMove) {
               nextSR[resourcesToMove] += 1;
             }
-            Object.entries(constructionStepResources).forEach(([res, amount]) => {
-              const key = res as keyof typeof siteResources;
-              nextSR[key] = Math.max(0, nextSR[key] - amount!);
-            });
+            for (const res in constructionStepResources) {
+              if (Object.prototype.hasOwnProperty.call(constructionStepResources, res)) {
+                const amount = constructionStepResources[res as keyof typeof constructionStepResources];
+                const key = res as keyof typeof siteResources;
+                nextSR[key] = Math.max(0, nextSR[key] - amount!);
+              }
+            }
             return nextSR;
           });
         }
