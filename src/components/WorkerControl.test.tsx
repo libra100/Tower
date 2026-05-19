@@ -2,7 +2,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { WorkerControl } from './WorkerControl';
 import { Pickaxe } from 'lucide-react';
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 
 describe('WorkerControl', () => {
   const defaultProps = {
