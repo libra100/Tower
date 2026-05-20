@@ -555,12 +555,11 @@ export default function App() {
 
           if (nextStage !== 'NONE') {
             const costs = COSTS[nextStage as keyof typeof COSTS];
-
             let hasEnough = true;
             for (const res in costs) {
               if (Object.prototype.hasOwnProperty.call(costs, res)) {
                 const amount = costs[res as keyof typeof costs];
-                if (!(siteResources[res as keyof typeof siteResources] >= amount * 0.1)) {
+                if (siteResources[res as keyof typeof siteResources] < (amount as number) * 0.1) {
                   hasEnough = false;
                   break;
                 }
