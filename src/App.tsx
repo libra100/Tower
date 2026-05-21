@@ -575,7 +575,7 @@ export default function App() {
                 if (Object.prototype.hasOwnProperty.call(costs, res)) {
                   const amount = costs[res as keyof typeof costs];
                   const rKey = res as keyof typeof siteResources;
-                  constructionStepResources[rKey] = (amount as number) * step;
+                  constructionStepResources[rKey] = amount * step;
                 }
               }
 
@@ -593,7 +593,7 @@ export default function App() {
             const nextR = { ...r };
             for (const res in resourcesToProduce) {
               if (Object.prototype.hasOwnProperty.call(resourcesToProduce, res)) {
-                const amount = resourcesToProduce[res as keyof typeof resources];
+                const amount = resourcesToProduce[res as keyof typeof resourcesToProduce];
                 const key = res as keyof typeof resources;
                 nextR[key] += amount!;
               }
@@ -613,7 +613,7 @@ export default function App() {
             }
             for (const res in constructionStepResources) {
               if (Object.prototype.hasOwnProperty.call(constructionStepResources, res)) {
-                const amount = constructionStepResources[res as keyof typeof siteResources];
+                const amount = constructionStepResources[res as keyof typeof constructionStepResources];
                 const key = res as keyof typeof siteResources;
                 nextSR[key] = Math.max(0, nextSR[key] - amount!);
               }
